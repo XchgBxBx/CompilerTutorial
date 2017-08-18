@@ -4,24 +4,29 @@
 #include <ctype.h>
 
 
+#define MAXNUM 5
+#define MAXNAME 30
+
 char look;
 
 
 void init();
 void nextChar();
+void skipWhite();
 
 void error(char *fmt, ...);
 void fatal(char *fmt, ...);
 void expected(char *fmt, ...);
 void match(char c);
-char getName();
-char getNum();
+void getName(char *name);
+void getNum(char *num);
 
 void emit(char *fmt, ...);
 
 void expression();
 void term();
 void factor();
+void ident();
 
 int isAddOp(char c);
 
@@ -29,15 +34,23 @@ void add();
 void subtract();
 void multiply();
 void divide();
+void assignment();
 
 void init()
 {
 	nextChar();
+	skipWhite();
 }
 
 void nextChar()
 {
 	look = getchar();
+}
+
+void skipWhite()
+{
+	while(look == ' ' || look == '\t')
+		nextChar();
 }
 
 void error(char *fmt, ...)
@@ -91,30 +104,47 @@ void match(char c)
 	if(look != c)
 		expected("'%c'", c);
 	nextChar();
+	skipWhite();
 }
 
-char getName()
+void getName(char *name)
 {
-	char name;
+	int i;
 
 	if(!isalpha(look))
 		expected("Name");
-	name = toupper(look);
-	nextChar();
+	
+	for(i = 0; isalnum(look); i++)
+	{
+		if(i >= MAXNAME)
+			fatal("identifier too long!");
 
-	return name;
+		name[i] = toupper(look);
+		nextChar();
+	}
+	
+	name[i] = '\0';
+	skipWhite();
 }
 
-char getNum()
+void getNum(char *num)
 {
-	char num;
+	int i;
 
 	if(!isdigit(look))
 		expected("Integer");
-	num = look;
-	nextChar();
 
-	return num;
+	for(i = 0; isdigit(look); i++)
+	{
+		if(i >= MAXNUM)
+			fatal("integer too long!");
+
+		num[i] = look;
+		nextChar();
+	}
+
+	num[i] = '\0';
+	skipWhite();
 }
 
 void emit(char *fmt, ...)
@@ -170,16 +200,31 @@ void divide()
 	emit("IDIV BX");
 }
 
+void assignment()
+{
+	char name[MAXNAME + 1];
+	getName(name);
+	match('=');
+	expression();
+	emit("MOV [%s], AX", name);
+}
+
 void factor()
 {
+	char num[MAXNUM + 1];
 	if(look == '(')
 	{
 		match('(');
 		expression();
 		match(')');
 	}
+	else if(isalpha(look))
+		ident();
 	else
-		emit("MOV AX, %c", getNum());
+	{
+		getNum(num);
+		emit("MOV AX, %s", num);
+	}
 }
 
 void term()
@@ -195,9 +240,6 @@ void term()
 			break;
 		case '/':
 			divide();
-			break;
-		default:
-			expected("MulOp");
 			break;
 		}
 	}
@@ -220,17 +262,31 @@ void expression()
 		case '-':
 			subtract();
 			break;
-		default:
-			expected("AddOp");
-			break;
 		}
 	}
+}
+
+void ident()
+{
+	char name[MAXNAME + 1];
+	getName(name);
+	if(look == '(')
+	{
+		match('(');
+		match(')');
+		emit("CALL %s", name);
+	}
+	else
+		emit("MOV AX, [%s]", name);
 }
 
 int main(int argc, char **argv)
 {
 	init();
-	expression();
+	assignment();
+
+	if(look != '\n')
+		expected("NewLine");
 
 	return 0;
 }
