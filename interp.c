@@ -3,18 +3,27 @@
 #include <stdarg.h>
 #include <ctype.h>
 
+#define MAXVAR 26
+int var[MAXVAR];
+
 
 char look;
 
 
 void init();
+void initVar();
+
 void nextChar();
+void newLine();
+
 void error(char *fmt, ...);
 void fatal(char *fmt, ...);
 void expected(char *fmt, ...);
+
 void match(char c);
 char getName();
 int getNum();
+
 void emit(char *fmt, ...);
 
 int isAddOp(char c);
@@ -23,15 +32,33 @@ int isMulOp(char c);
 int expression();
 int term();
 int factor();
+void assignment();
+
+void input();
+void output();
 
 void init()
 {
+	initVar();
 	nextChar();
+}
+
+void initVar()
+{
+	int i;
+	for(i = 0; i < MAXVAR; i++)
+		var[i] = 0;
 }
 
 void nextChar()
 {
 	look = getchar();
+}
+
+void newLine()
+{
+	if(look == '\n')
+		nextChar();
 }
 
 int isAddOp(char c)
@@ -150,6 +177,8 @@ int factor()
 		val = expression();
 		match(')');
 	}
+	else if(isalpha(look))
+		val = var[getName() - 'A'];
 	else
 		val = getNum();
 
@@ -208,9 +237,56 @@ int expression()
 	return val;
 }
 
+void assignment()
+{
+	char name;
+	
+	name = getName();
+	match('=');
+	var[name -'A'] = expression();
+}
+
+void input()
+{
+	char name;
+	char buffer[20];
+
+	match('?');
+	name = getName();
+	printf("%c? ", name);
+	fgets(buffer, 20, stdin);
+	var[name - 'A'] = atoi(buffer);
+}
+
+void output()
+{
+	char name;
+
+	match('!');
+	name = getName();
+	printf("%c -> %d\n", name, var[name - 'A']);
+}
+
 int main(int argc, char **argv)
 {
 	init();
-	printf("%d\n", expression());
+	do
+	{
+		switch(look)
+		{
+		case '?':
+			input();
+			break;
+		case '!':
+			output();
+			break;
+		default:
+			assignment();
+			break;
+		}
+		newLine();
+	}
+	while(look != '.');
+
 	return 0;
 }
