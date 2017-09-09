@@ -19,16 +19,18 @@ void emit(char *fmt, ...);
 
 void other();
 void program();
-void block();
+void block(int exitLabel);
 int newLabel();
 int postLabel(int lbl);
-void doIf();
+void doIf(int exitLabel);
 void condition();
 void doWhile();
 void doLoop();
 void doRepeat();
 void doFor();
 void expression();
+void doDo();
+void doBreak(int exitLabel);
 
 void init()
 {
@@ -136,13 +138,13 @@ void other()
 
 void program()
 {
-	block();
+	block(-1);
 	if(look != 'e')
 		expected("End");
 	emit("END");
 }
 
-void block()
+void block(int exitLabel)
 {
 	int follow;
 
@@ -153,7 +155,7 @@ void block()
 		switch(look)
 		{
 		case 'i':
-			doIf();
+			doIf(exitLabel);
 			break;
 		case 'w':
 			doWhile();
@@ -166,6 +168,12 @@ void block()
 			break;
 		case 'f':
 			doFor();
+			break;
+		case 'd':
+			doDo();
+			break;
+		case 'b':
+			doBreak(exitLabel);
 			break;
 		case 'e':
 		case 'l':
@@ -189,7 +197,7 @@ int postLabel(int lbl)
 	printf("L%d:\n", lbl);
 }
 
-void doIf()
+void doIf(int exitLabel)
 {
 	int l1, l2;
 
@@ -198,14 +206,14 @@ void doIf()
 	l1 = newLabel();
 	l2 = l1;
 	emit("JZ L%d", l1);
-	block();
+	block(exitLabel);
 	if(look == 'l')
 	{
 		match('l');
 		l2 = newLabel();
 		emit("JMP L%d", l2);
 		postLabel(l1);
-		block();
+		block(exitLabel);
 	}
 	match('e');
 	postLabel(l2);
@@ -226,7 +234,7 @@ void doWhile()
 	postLabel(l1);
 	condition();
 	emit("JZ L%d", l2);
-	block();
+	block(l2);
 	match('e');
 	emit("JMP L%d", l1);
 	postLabel(l2);
@@ -234,27 +242,31 @@ void doWhile()
 
 void doLoop()
 {
-	int l;
+	int l1, l2;
 
 	match('p');
-	l = newLabel();
-	postLabel(l);
-	block();
+	l1 = newLabel();
+	l2 = newLabel();
+	postLabel(l1);
+	block(l2);
 	match('e');
-	emit("JMP L%d", l);
+	emit("JMP L%d", l1);
+	postLabel(l2);
 }
 
 void doRepeat()
 {
-	int l;
+	int l1, l2;
 
 	match('r');
-	l = newLabel();
-	postLabel(l);
-	block();
+	l1 = newLabel();
+	l2 = newLabel();
+	postLabel(l1);
+	block(l2);
 	match('u');
 	condition();
-	emit("JZ L%d", l);
+	emit("JZ L%d", l1);
+	postLabel(l2);
 }
 
 void doFor()
@@ -280,11 +292,38 @@ void doFor()
 	emit("PUSH BX");
 	emit("CMP AX, BX");
 	emit("JG L%d", l2);
-	block();
+	block(l2);
 	match('e');
 	emit("JMP L%d", l1);
 	postLabel(l2);
 	emit("POP AX");
+}
+
+void doDo()
+{
+	int l1, l2;
+	
+	match('d');
+	l1 = newLabel();
+	l2 = newLabel();
+	expression();
+	emit("MOV CX, AX");
+	postLabel(l1);
+	emit("PUSH CX");
+	block(l2);
+	emit("POP CX");
+	emit("LOOP L%d", l);
+	emit("PUSH CX");
+	postLabel(l2);
+	emit("POP CX");
+}
+
+void doBreak(int exitLabel)
+{
+	match('b');
+	if(l == -1)
+		fatal("No loop to break");
+	emit("JMP %d", exitLabel);
 }
 
 void expression()
